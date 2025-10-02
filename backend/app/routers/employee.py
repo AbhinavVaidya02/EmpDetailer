@@ -1,18 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from typing import List
 from sqlalchemy.orm import Session
-from .. import models, schemas, database
+from app import models, schemas, database
 import os
 from datetime import datetime
-from .. utils.HTTPResponse import HTTPResponse
+from app.utils.HTTPResponse import HTTPResponse
 
-router = APIRouter()
-
-def get_db():
-    db = database.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+router = APIRouter(prefix="/employees", tags=["Employees"])
 
 # Path to resume folder
 RESUME_FOLDER = os.path.join(os.path.dirname(__file__), "../../resumes")
@@ -20,13 +14,13 @@ RESUME_FOLDER = os.path.join(os.path.dirname(__file__), "../../resumes")
 # Make sure folder exists
 os.makedirs(RESUME_FOLDER, exist_ok=True)
 
-@router.post("/employees/", response_model=schemas.EmployeeOut)
+@router.post("/", response_model=schemas.EmployeeOut)
 def create_employee_with_resume(
     name: str = Form(...),
     email: str = Form(...),
     position: str = Form(...),
     resume: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(database.get_db)
 ):
     try:
         # 1. Create employee entry with actual_resume_filename but ref_resume_filename as None initially
@@ -40,7 +34,6 @@ def create_employee_with_resume(
         db.add(new_emp)
         db.commit()
         db.refresh(new_emp)
-        print("In...")
 
         # 2. Rename resume file to {id}_{timestamp}.pdf
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -55,10 +48,19 @@ def create_employee_with_resume(
         new_emp.ref_resume_filename = new_filename
         db.commit()
         db.refresh(new_emp)
-        print("Out1...")
         employee_data = schemas.EmployeeOut.model_validate(new_emp).model_dump()
-        print("Out2...")
         return HTTPResponse.success(message="User Details", result=employee_data)
+    except Exception as e:
+        print(str(e))
+        return HTTPResponse.error()
+    
+
+@router.get("/", response_model=List[schemas.EmployeeOut])
+def read_employees(db: Session = Depends(database.get_db)):
+    try:
+        employees = db.query(models.Employee).filter(models.Employee.is_deleted == False).all()
+        result = [schemas.EmployeeOut.model_validate(emp).model_dump() for emp in employees]
+        return HTTPResponse.success(message="user details", result=result)
     except Exception as e:
         print(str(e))
         return HTTPResponse.error()

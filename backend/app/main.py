@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from .database import Base, engine
-from .routers import employee
+from app.database import Base, engine
+from app.routers import employee
 from fastapi.middleware.cors import CORSMiddleware
 
 # Create tables
@@ -17,5 +17,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/test")
+def root():
+    return {"message": "API is working"}
 # Include employee routes
 app.include_router(employee.router)
