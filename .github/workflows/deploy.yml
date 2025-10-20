@@ -1,0 +1,36 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - master  # Trigger on merge to master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/EmpDetailer
+            git fetch --all
+            git reset --hard origin/master
+            # Backend
+            cd backend
+            source venv/bin/activate
+            pip install -r requirements.txt
+            tmux kill-session -t backend || true
+            tmux new -d -s backend "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+            # Frontend
+            cd ../frontend
+            npm install
+            tmux kill-session -t frontend || true
+            tmux new -d -s frontend "npm start -- --host 0.0.0.0 --port 5173"
